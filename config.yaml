@@ -1,0 +1,95 @@
+# narv - Global Configuration
+
+api:
+  # Daily limit for OpenRouter API. Triggers budget exhaustion safeguards when reached.
+  openrouter_budget_daily: 1000
+  retry_base_delay_sec: 1
+  max_retries: 3
+
+  # Models for dual-process cognition. 
+  # 'fast' is used for immediate, reactive tasks (System 1).
+  # 'slow' is used for deep reflection and complex planning (System 2).
+  model_fast: "openrouter_text_model_here"
+  model_slow: "openrouter_text_model_here"
+  model_embed: "openrouter_embedding_model_here"
+
+cognitive:
+  # Routing threshold. Events with urgency >= this value bypass the slow model 
+  # and are routed to the fast model. Lower this to prioritize speed and reduce cost.
+  urgency_threshold_fast: 0.8
+
+  # Load threshold. If cognitive load exceeds this, the system may force a rest phase 
+  # or throttle inputs. Increase to sustain high-intensity processing longer.
+  cognitive_load_max: 0.8
+
+  # Token limits for different cognitive phases. 
+  # Tune these to balance response detail against API latency and token budget.
+  fast_tokens: 1024
+  slow_tokens: 4096
+  dmn_tokens: 4096
+  sleep_tokens: 4096
+
+system:
+  log_level: "INFO"
+
+  # Controls how quickly the system enters the Sleep phase (memory consolidation).
+  # Decrease to consolidate memories more frequently; increase to stay reactive longer.
+  idle_cycles_for_sleep: 60
+  max_cognition_failures: 3
+  max_resume_loop: 10
+  cycle_interval_seconds: 30.0
+
+  # Capacity of Working Memory (Redis). When exceeded, older session events are pruned 
+  # to a core set (e.g., 20). Increase to retain a longer raw event history before pruning.
+  session_memory_keep_count: 200
+
+  # LLM Attention Focus Size. Defines how many recent events are injected into the 
+  # cognitive prompt. Tune to balance context richness against token cost and noise.
+  context_window_size: 40
+
+perceptor:
+  # Urgency weights assigned to different types of perceptual inputs.
+  # Adjust these to control how easily specific events trigger 'fast' cognitive routing.
+  urgency_anomaly: 0.9
+  urgency_normal: 0.2
+  urgency_shell_output: 0.3
+
+actor:
+  sandbox_root: "data/sandbox"
+  allowed_commands: "mkdir,rm,mv,grep,echo,ls,cat,pwd,sed,awk,python,python3"
+  timeout_ms: 30000
+
+memory:
+  redis_url: "redis://localhost:6379/0"
+  chroma_persist_dir: "./data/chroma"
+  neo4j_uri: "bolt://localhost:7687"
+  neo4j_user: "neo4j"
+  neo4j_password: "narv_memory_2026"
+
+  # Similarity threshold for vector search. Increase for stricter, more precise memory recall;
+  # decrease to allow broader, fuzzier associations.
+  cosine_threshold: 0.75
+  top_n_default: 5
+
+  # --- Capacity Management ---
+  # Redis (SessionMemory) limits.
+  redis_max_entries: 500
+  redis_ttl_seconds: 86400       # 24 hours
+
+  # ChromaDB (LongTermMemory) capacity and eviction rules.
+  chroma_max_entries: 10000
+  chroma_eviction_batch: 500
+
+  # Importance threshold for Long-Term Memory. During capacity management, 
+  # entries with importance below this value are permanently forgotten.
+  chroma_eviction_threshold: 0.7 # Marks importance < 0.7 for eviction
+
+  # Neo4j (StructuralMemory) capacity and compression rules.
+  neo4j_max_nodes: 5000
+
+  # Triggers graph compression when node count exceeds this threshold.
+  neo4j_archive_threshold: 4000
+
+  # Importance threshold for Structural Memory. Nodes below this value 
+  # are archived/compressed to maintain graph traversal performance.
+  neo4j_min_importance: 0.3      # Marks nodes with importance < 0.3 for compression

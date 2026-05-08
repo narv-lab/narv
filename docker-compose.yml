@@ -1,0 +1,89 @@
+# docker-compose.yml — Memory Infrastructure (Hierarchical Hybrid)
+# Redis (Working Memory) + Neo4j (Structural Memory)
+# ChromaDB is not needed here as it operates in local file mode via the Python library
+
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: narv-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: narv-neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/data
+    environment:
+      NEO4J_AUTH: neo4j/narv_memory_2026
+      NEO4J_PLUGINS: '[]'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p narv_memory_2026 'RETURN 1' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  narv:
+    build: .
+    container_name: narv-core
+    depends_on:
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      MEMORY_REDIS_URL: "redis://redis:6379/0"
+      MEMORY_NEO4J_URI: "bolt://neo4j:7687"
+      ACTOR_SANDBOX_ROOT: "/app/data/sandbox"
+      PYTHONPATH: "/app"
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    container_name: narv-dashboard
+    command: ["python", "tools/web_dashboard.py"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      MEMORY_REDIS_URL: "redis://redis:6379/0"
+      MEMORY_NEO4J_URI: "bolt://neo4j:7687"
+      ACTOR_SANDBOX_ROOT: "/app/data/sandbox"
+      PYTHONPATH: "/app"
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  neo4j_data:
+  logs:

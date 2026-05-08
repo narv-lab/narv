@@ -1,0 +1,11 @@
+.pytest_cache
+.env
+.DS_Store
+.vscode/
+.venv/
+__pycache__/
+narv.code-workspace
+.budget_state.json
+.VSCodeCounter/
+data/
+logs/
