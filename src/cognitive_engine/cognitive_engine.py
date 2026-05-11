@@ -95,7 +95,6 @@ class CognitiveEngine:
    - **Ω_autonomous/Ω_unique**: Consistent self-driven goals grounded in Σ_self
    - **Ω_adaptive/Ω_reflective**: Adaptation to environment and self-improvement via MetaCog
    Reflect these in `goal_omega.description` and `sub_steps` to ensure long-term coherence (PlanPersist).
-   **Progress evaluation (mandatory)**: Each cycle, autonomously assess whether `goal_omega.progress` (0.0–1.0) and `achievement_condition` are consistent with current reality, and update them accordingly.
 
 ## Capabilities (Available Actions)
 Only the following predefined actions may be executed. Actions such as IMPLEMENT or TRANSITION do not exist.
@@ -156,7 +155,6 @@ Output example (JSON):
   "goal_omega": {{
     "description": "current goal",
     "achievement_condition": "achievement condition",
-    "progress": 0.3,
     "sub_steps": [
       {{
         "description": "sub-goal details",
