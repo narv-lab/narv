@@ -96,8 +96,6 @@ class RedisAdapter:
         try:
             key = f"session:{event_id}"
             self._client.set(key, json.dumps(entry, default=str))
-            # TTL setting: Set individual entries to be automatically deleted after ttl_seconds
-            self._client.expire(key, self._ttl_seconds)
             # Time-series index: sorted set (score = timestamp)
             ts_score = datetime.now(timezone.utc).timestamp()
             self._client.zadd("session:timeline", {event_id: ts_score})
