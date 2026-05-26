@@ -156,16 +156,18 @@ class KernelOrchestrator:
             if diverged_thoughts and isinstance(diverged_thoughts[0], dict):
                 goal_delta = diverged_thoughts[0].get("potential_goal_delta", {})
                 if goal_delta.get("description") and float(goal_delta.get("priority", 0.0)) >= 0.4:
-                    self._state.goal_omega = {
-                        "description": goal_delta["description"],
-                        "achievement_condition": goal_delta.get("achievement_condition", ""),
-                        "progress": float(goal_delta.get("progress", 0.0)),
-                        "sub_steps": goal_delta.get("sub_steps", []),
-                    }
-                    self._goal_last_updated_epoch = time.time()
+                    # Treat DMN output as a latent goal (Ω_latent) instead of directly overwriting goal_omega.
+                    # It is stored in memory for convergence processes (Reflection/process_cognition) to evaluate.
+                    self._mediator.route_action("memory", "store_event", {
+                        "event_type": "DMN_LATENT_GOAL",
+                        "payload": {"potential_goal_delta": goal_delta},
+                        "importance": float(goal_delta.get("priority", 0.3)),
+                        "session_id": self._state.session_id,
+                    })
+                    
                     # Ω_selfgen(C): Intrinsic urgency injection — triggers process_cognition in the next cycle
                     self._intrinsic_urgency = max(self._intrinsic_urgency, float(goal_delta.get("priority", 0.3)))
-                    logger.info("Ω_selfgen: intrinsic urgency injected=%.2f from DMN goal_delta", self._intrinsic_urgency)
+                    logger.info("Ω_selfgen: intrinsic urgency injected=%.2f from DMN latent goal", self._intrinsic_urgency)
             
             self._idle_mode = "REFLECTION"
         else:
