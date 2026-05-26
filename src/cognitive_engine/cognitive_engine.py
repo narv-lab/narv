@@ -412,7 +412,12 @@ Output in the following JSON format:
             keywords = ["self-awareness", "rules", "speech style", "settings"]
             if perceptions:
                 for p in perceptions:
-                    msg = p.get("payload", {}).get("message", "")
+                    payload = p.get("payload") or {}
+                    msg = ""
+                    if isinstance(payload, dict):
+                        msg = payload.get("message", "")
+                    elif isinstance(payload, str):
+                        msg = payload
                     if msg:
                         keywords.append(msg)
             return {
@@ -429,13 +434,35 @@ Output in the following JSON format:
 
         # Apply aliasing
         limit = config.system_context_window_size
-        events_to_alias = session_memory.get("events", [])[-limit:] + perceptions
-        aliased_session, alias_map = self._apply_aliasing(events_to_alias)
+        history_events = session_memory.get("events", [])[-limit:]
+        events_to_alias = history_events + perceptions
+        
+        # Assign aliases to maintain continuous REF IDs
+        alias_map = {}
+        aliased_events = []
+        for i, ev in enumerate(events_to_alias):
+            alias = f"REF-{i+1:03d}"
+            event_id = ev.get("id") or ev.get("event_id") or "unknown"
+            alias_map[alias] = event_id
+            aliased_ev = {
+                "alias": alias,
+                "event_type": ev.get("event_type"),
+                "payload": ev.get("payload")
+            }
+            aliased_events.append(aliased_ev)
+            
+        # Split back into history and perceptions
+        history_len = len(history_events)
+        aliased_history = aliased_events[:history_len]
+        aliased_perceptions = aliased_events[history_len:]
+        
+        aliased_session = json.dumps(aliased_history, ensure_ascii=False, indent=2)
+        aliased_perceptions_str = json.dumps(aliased_perceptions, ensure_ascii=False, indent=2)
 
         # Loop 2: Receive memory results and LLM request for Stage 1 (Plan Generation)
         if not llm_results:
             prompt = self._build_plan_prompt(
-                "(the most recent perception is at the end)", current_internal_state, aliased_session, system_mode,
+                aliased_perceptions_str, current_internal_state, aliased_session, system_mode,
                 capabilities or {}, emotion_flow_mu, value_form_v, selfgen_triggered, memory_results
             )
             return {
