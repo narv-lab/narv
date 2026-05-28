@@ -58,6 +58,7 @@ services:
       ACTOR_SANDBOX_ROOT: "/app/data/sandbox"
       PYTHONPATH: "/app"
     restart: unless-stopped
+    stop_grace_period: 5s
 
   dashboard:
     build: .
@@ -82,6 +83,7 @@ services:
       ACTOR_SANDBOX_ROOT: "/app/data/sandbox"
       PYTHONPATH: "/app"
     restart: unless-stopped
+    stop_grace_period: 5s
 
 volumes:
   redis_data:

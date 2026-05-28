@@ -63,6 +63,43 @@ def load_from_redis(limit=100):
         print(f"Redis Error: {e}")
         return []
 
+def load_chat_from_redis(scan_limit=500, max_display=150):
+    """
+    Chat用に、会話イベント（USER_INPUT, SYSTEM_NOTIFY）を漏れなくロードし、
+    同時に最新のシステム思考プロセスも表示できるようバランスよくデータを取得する。
+    """
+    try:
+        import redis
+        client = redis.Redis.from_url(config.memory_redis_url, decode_responses=True)
+        # 過去 scan_limit 件のイベントIDを最新順に取得
+        ids = client.zrevrange("session:timeline", 0, scan_limit - 1)
+        
+        chat_events = []
+        internal_events = []
+        
+        for eid in ids:
+            raw = client.get(f"session:{eid}")
+            if raw:
+                entry = json.loads(raw)
+                entry['payload'] = decode_payload(entry.get('payload'))
+                etype = entry.get('event_type', '')
+                
+                if etype in ["USER_INPUT", "SYSTEM_NOTIFY"]:
+                    chat_events.append(entry)
+                else:
+                    # 内部思考などは最新のものだけを対象とする
+                    if len(internal_events) < 50:
+                        internal_events.append(entry)
+                        
+        # 会話イベントと内部イベントを統合し、日付順にソートする
+        merged = chat_events + internal_events
+        merged.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return merged[:max_display]
+    except Exception as e:
+        print(f"Redis Chat Error: {e}")
+        return []
+
 def load_from_chroma(limit=50):
     """ChromaDB(LongTermMemory)からデータをロードする"""
     try:
@@ -119,8 +156,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             # データのロード
             session_data = load_from_redis(100)
             
-            # Chat用（全てのイベントをフロントエンドに送り、表示形式の判定はJS側に委ねる）
-            chat_data = session_data[:]
+            # Chat用（会話イベントを漏らさずロードする専用の関数を使用）
+            chat_data = load_chat_from_redis(500, 150)
             # 表示用に昇順へ戻す
             chat_data.reverse()
             
@@ -222,22 +259,129 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100vh; overflow: hidden
 .panel.active { display: flex; flex-direction: column; }
 
 /* Chat */
-#p-chat { padding: 20px 24px; gap: 8px; }
+#p-chat { padding: 0; }
+.chat-layout { display: flex; width: 100%; height: 100%; overflow: hidden; }
+.chat-main { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 8px; }
+.goal-sidebar {
+    width: 320px; flex-shrink: 0; border-left: 1px solid __COLOR_BORDER__;
+    background: __COLOR_SURFACE__; overflow-y: auto; padding: 20px;
+    display: flex; flex-direction: column; gap: 20px;
+}
+.goal-card {
+    background: #FFFFFF; border: 1px solid __COLOR_BORDER__; border-radius: 12px;
+    padding: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+}
+.goal-title { font-size: 0.95rem; font-weight: 600; color: __COLOR_TEXT__; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.goal-condition { font-size: 0.78rem; color: __COLOR_MUTED__; margin-bottom: 12px; line-height: 1.4; }
+.progress-bar-bg { width: 100%; height: 6px; background: #E2E8F0; border-radius: 3px; overflow: hidden; position: relative; }
+.progress-bar-fg { height: 100%; background: __COLOR_ACCENT__; border-radius: 3px; transition: width 0.3s ease; }
+.progress-text { font-size: 0.72rem; color: __COLOR_MUTED__; text-align: right; margin-top: 4px; font-weight: 500; }
+
+.substeps-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.substep-item {
+    background: #FFFFFF; border: 1px solid __COLOR_BORDER__; border-radius: 8px;
+    padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start;
+    transition: all 0.2s ease;
+}
+.substep-item:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.substep-item.completed { border-left: 4px solid #10B981; background: #F0FDF4; }
+.substep-item.in_progress { border-left: 4px solid __COLOR_ACCENT__; background: #EFF6FF; }
+.substep-item.pending { border-left: 4px solid #94A3B8; }
+.substep-item.failed { border-left: 4px solid #EF4444; background: #FEF2F2; }
+
+.substep-icon { font-size: 1.1rem; flex-shrink: 0; line-height: 1; }
+.substep-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.substep-desc { font-size: 0.82rem; font-weight: 500; color: __COLOR_TEXT__; line-height: 1.3; }
+.substep-cond { font-size: 0.72rem; color: __COLOR_MUTED__; line-height: 1.2; }
+.substep-status-badge {
+    align-self: flex-start; font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 4px; margin-top: 4px;
+}
+.substep-status-badge.completed { background: #D1FAE5; color: #065F46; }
+.substep-status-badge.in_progress { background: #DBEAFE; color: #1E40AF; }
+.substep-status-badge.pending { background: #E2E8F0; color: #475569; }
+.substep-status-badge.failed { background: #FEE2E2; color: #991B1B; }
+
 .row { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 4px; }
 .row.u { flex-direction: row-reverse; }
-.b { max-width: 72%; padding: 12px 16px; border-radius: 18px; line-height: 1.5; white-space: pre-wrap; font-size: 0.9rem; }
+.row.u .mc { display: flex; flex-direction: column; align-items: flex-end; flex: 1; }
+.row.a .mc { display: flex; flex-direction: column; align-items: flex-start; flex: 1; }
+.row.e .mc { display: flex; flex-direction: column; align-items: flex-start; flex: 1; }
+.b { max-width: 72%; padding: 10px 14px; border-radius: 16px; line-height: 1.45; white-space: pre-wrap; font-size: 0.88rem; }
 .u .b { background: __COLOR_ACCENT__; color: #ffffff; border-bottom-right-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .a .b { background: __COLOR_AGENT_BG__; border: 1px solid __COLOR_BORDER__; border-bottom-left-radius: 4px; }
 .e .b { background: __COLOR_ERR_BG__; color: __COLOR_ERR_FG__; border: 1px solid rgba(220,38,38,0.15); border-bottom-left-radius: 4px; }
-.ts { font-size: 0.68rem; color: #A1A1AA; margin-top: 6px; }
+.ts { font-size: 0.65rem; color: #A1A1AA; margin-top: 4px; }
 .u .ts { text-align: right; }
 .av { font-size: 1.15rem; margin-bottom: 2px; flex-shrink: 0; }
 
-/* Thoughts */
-.th { background: __COLOR_SURFACE__; margin: 4px 0; border: 1px solid __COLOR_BORDER__; border-radius: 12px; padding: 10px 16px; color: __COLOR_MUTED__; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-details summary { cursor: pointer; user-select: none; list-style: none; outline: none; font-size: 0.8rem; font-weight: 500; color: #52525B; }
+/* Thoughts (Accordions) */
+.th {
+    background: transparent;
+    margin: 1px 0;
+    border: none;
+    border-radius: 0;
+    padding: 2px 0 2px 24px;
+    color: #94A3B8;
+    box-shadow: none;
+    position: relative;
+}
+.th::before {
+    content: "•";
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #CBD5E1;
+    font-size: 0.8rem;
+}
+details summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    outline: none;
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: #94A3B8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    transition: color 0.15s ease;
+}
+details summary::after {
+    content: "›";
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #94A3B8;
+    transition: transform 0.2s ease, color 0.15s ease;
+    margin-left: auto;
+    padding-right: 8px;
+}
+details summary:hover {
+    color: __COLOR_ACCENT__;
+}
+details summary:hover::after {
+    color: __COLOR_ACCENT__;
+}
 details summary::-webkit-details-marker { display: none; }
-.tp { margin-top: 10px; font-size: 0.7rem; color: #3F3F46; font-family: ui-monospace, 'Fira Mono', monospace; white-space: pre-wrap; overflow-x: auto; background: #F4F4F5; padding: 8px; border-radius: 6px; border: 1px solid #E5E7EB; }
+.th details[open] summary { border-bottom: none; padding-bottom: 0; margin-bottom: 4px; color: __COLOR_TEXT__; font-weight: 500; }
+.th details[open] summary::after {
+    transform: rotate(90deg);
+    color: __COLOR_TEXT__;
+}
+.tp {
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: #475569;
+    font-family: ui-monospace, 'Fira Mono', monospace;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    background: #F8FAFC;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #E2E8F0;
+}
 
 /* DB View */
 #p-db { padding: 20px 24px; }
@@ -327,7 +471,15 @@ tr:hover td { background: __COLOR_SURFACE__; }
 
   <!-- Chat View -->
   <div id="p-chat" class="panel active">
-     <div id="chat-content"></div>
+     <div class="chat-layout">
+         <div id="chat-content" class="chat-main"></div>
+         <div id="goal-sidebar" class="goal-sidebar">
+             <div class="lbl" style="margin-top: 0;">🎯 Current Goal (Ω)</div>
+             <div id="goal-info"></div>
+             <div class="lbl">📋 Sub Steps</div>
+             <div id="substeps-info" class="substeps-list"></div>
+         </div>
+     </div>
   </div>
 
   <!-- DB Explorer View -->
@@ -393,13 +545,16 @@ tr:hover td { background: __COLOR_SURFACE__; }
         const ic = document.querySelector('.input-container');
         if(ic) ic.style.display = (name === 'chat') ? 'flex' : 'none';
         
-        if(name === 'chat') scrollChat();
+        if(name === 'chat') setTimeout(scrollChat, 50);
         if(name === 'graph') loadGraph();
-    } catch(e) { console.error("Tab switch error:", e); }
+    } catch(e) {
+        console.error("Tab switch error:", e);
+        alert(`Tab switch error: ${e.message}\nStack: ${e.stack}`);
+    }
   }
 
   function scrollChat() {
-      const pChat = document.getElementById('p-chat');
+      const pChat = document.getElementById('chat-content');
       if (!pChat) return;
       const isScrolledUp = storage.get('narv_chat_scrolled_up') === 'true';
       if (!isScrolledUp) {
@@ -408,8 +563,8 @@ tr:hover td { background: __COLOR_SURFACE__; }
   }
 
   // Setup UI elements after definition
-  document.addEventListener('DOMContentLoaded', () => {
-      const pChat = document.getElementById('p-chat');
+  function initDashboard() {
+      const pChat = document.getElementById('chat-content');
       if(pChat) {
           pChat.addEventListener('toggle', (e) => {
               if(e.target.tagName === 'DETAILS') {
@@ -436,7 +591,13 @@ tr:hover td { background: __COLOR_SURFACE__; }
       show(activeTab);
       fetchData();
       setInterval(fetchData, 5000);
-  });
+  }
+
+  if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initDashboard);
+  } else {
+      initDashboard();
+  }
 
   // Send Input to Python Backend
   async function handleInputKey(e) {
@@ -635,7 +796,7 @@ tr:hover td { background: __COLOR_SURFACE__; }
                 html += `
                 <div class="row u">
                    <div class="av">👽</div>
-                   <div>
+                   <div class="mc">
                       <div class="b">${escape(msg || JSON.stringify(rt.payload))}</div>
                       <div class="ts">${escape(rt.created_at)}</div>
                    </div>
@@ -644,7 +805,7 @@ tr:hover td { background: __COLOR_SURFACE__; }
                 html += `
                 <div class="row a">
                    <div class="av">⚙️</div>
-                   <div>
+                   <div class="mc">
                       <div class="b">${escape(msg)}</div>
                       <div class="ts">${escape(rt.created_at)}</div>
                    </div>
@@ -654,7 +815,7 @@ tr:hover td { background: __COLOR_SURFACE__; }
                 html += `
                 <div class="row ${rowClass}">
                    <div class="av">🤖</div>
-                   <div>
+                   <div class="mc">
                       <div class="b">${escape(msg)}</div>
                       <div class="ts">${escape(rt.created_at)}</div>
                    </div>
@@ -694,11 +855,69 @@ tr:hover td { background: __COLOR_SURFACE__; }
               if (stUrg && s.urgency != null) stUrg.innerText = Number(s.urgency).toFixed(2);
               if (stEmo && s.emotion_mu != null) stEmo.innerText = Number(s.emotion_mu).toFixed(2);
               if (stVal && s.value_v != null) stVal.innerText = Number(s.value_v).toFixed(2);
+
+              // Update Goal Omega and Substeps in Sidebar
+              const goalInfo = document.getElementById('goal-info');
+              const substepsInfo = document.getElementById('substeps-info');
+              if (goalInfo && substepsInfo) {
+                  if (s.goal_omega) {
+                      const g = s.goal_omega;
+                      const steps = g.sub_steps || [];
+                      let progress = g.progress != null ? g.progress : 0.0;
+                      
+                      // Dynamic progress fallback: calculate completed substeps percentage if progress is 0
+                      if (progress === 0.0 && steps.length > 0) {
+                          const completedCount = steps.filter(step => (step.status || '').toUpperCase() === 'COMPLETED').length;
+                          progress = completedCount / steps.length;
+                      }
+                      const progressPct = Math.round(progress * 100);
+                      
+                      goalInfo.innerHTML = `
+                          <div class="goal-card">
+                              <div class="goal-title">🎯 ${escape(g.description || 'No goal set')}</div>
+                              ${g.achievement_condition ? `<div class="goal-condition"><b>Condition:</b> ${escape(g.achievement_condition)}</div>` : ''}
+                              <div class="progress-bar-bg">
+                                  <div class="progress-bar-fg" style="width: ${progressPct}%"></div>
+                              </div>
+                              <div class="progress-text">${progressPct}% Completed</div>
+                          </div>
+                      `;
+                      
+                      if (steps.length === 0) {
+                          substepsInfo.innerHTML = `<div style="font-size:0.8rem;color:#64748B;font-style:italic;text-align:center;margin-top:10px;">No active sub steps</div>`;
+                      } else {
+                          substepsInfo.innerHTML = steps.map(step => {
+                              const status = (step.status || 'PENDING').toUpperCase();
+                              let statusClass = 'pending';
+                              let icon = '⚪';
+                              if (status === 'COMPLETED') { statusClass = 'completed'; icon = '✅'; }
+                              else if (status === 'IN_PROGRESS') { statusClass = 'in_progress'; icon = '⚡'; }
+                              else if (status === 'FAILED') { statusClass = 'failed'; icon = '❌'; }
+                              
+                              return `
+                                  <div class="substep-item ${statusClass}">
+                                      <div class="substep-icon">${icon}</div>
+                                      <div class="substep-content">
+                                          <div class="substep-desc">${escape(step.description)}</div>
+                                          ${step.achievement_condition ? `<div class="substep-cond">${escape(step.achievement_condition)}</div>` : ''}
+                                          <div class="substep-status-badge ${statusClass}">${status}</div>
+                                      </div>
+                                  </div>
+                              `;
+                          }).join('');
+                      }
+                  } else {
+                      goalInfo.innerHTML = `<div style="font-size:0.8rem;color:#64748B;font-style:italic;text-align:center;">No goal active</div>`;
+                      substepsInfo.innerHTML = '';
+                  }
+              }
           }
           
-          if(activeTab === 'chat') scrollChat();
+          if(activeTab === 'chat') setTimeout(scrollChat, 50);
       } catch(e) {
-          console.error("Fetch Data Error:", e);
+          console.warn("Fetch Data Error (server may be offline):", e.message);
+          const clock = document.getElementById('clock');
+          if (clock) clock.innerText = '⚠ Disconnected';
       }
   }
 
@@ -904,16 +1123,31 @@ tr:hover td { background: __COLOR_SURFACE__; }
         return html
 
 def run():
+    import signal
+    import sys
+    
     print(f"Starting Narv Native Web Dashboard at http://localhost:{PORT}")
     print("Press Ctrl+C to stop.")
     server_address = ('', PORT)
     httpd = HTTPServer(server_address, DashboardHandler)
+    
+    def handle_shutdown(signum, frame):
+        print(f"Signal {signum} received. Cleaning up and shutting down...")
+        httpd.server_close()
+        print("Dashboard stopped cleanly.")
+        sys.exit(0)
+        
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
+    
     try:
         httpd.serve_forever()
-    except KeyboardInterrupt:
+    except SystemExit:
         pass
-    httpd.server_close()
-    print("Dashboard stopped.")
+    except Exception as e:
+        print(f"Server error: {e}")
+    finally:
+        httpd.server_close()
 
 if __name__ == '__main__':
     run()
