@@ -960,7 +960,7 @@ class KernelOrchestrator:
                 "total_cycles_executed": cycle,
                 "final_state": self._state.system_state.value,
             }
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, SystemExit):
             logger.info("KernelOrchestrator: loop aborted by signal. cycles=%d", cycle)
             return {
                 "total_cycles_executed": cycle,

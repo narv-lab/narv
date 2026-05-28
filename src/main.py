@@ -7,7 +7,16 @@ logger = setup_logger("main")
 
 
 def main():
+    import signal
     logger.info("Starting Narv System Initialization...")
+
+    def handle_sigterm(signum, frame):
+        logger.info("Received signal %s. Initiating graceful shutdown...", signum)
+        import sys
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    signal.signal(signal.SIGINT, handle_sigterm)
 
     try:
         # Wire all modules
@@ -23,8 +32,8 @@ def main():
         else:
             logger.warning("Kernel not initialized. Exiting clean.")
 
-    except KeyboardInterrupt:
-        logger.info("Received KeyboardInterrupt. Shutting down gracefully.")
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Shutting down gracefully.")
     except Exception as e:
         logger.critical("Failed to start system: %s", e, exc_info=True)
         sys.exit(1)
