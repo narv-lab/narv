@@ -8,7 +8,10 @@ import uuid
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.memory.memory import Memory
 
 from src.core.logger import setup_logger
 from src.core.types import SystemState
@@ -100,9 +103,11 @@ class KernelStateManager:
 
     @emotion_flow_mu.setter
     def emotion_flow_mu(self, value: dict) -> None:
-        self._emotion_flow_mu = value
         if "value" in value:
-            self._emotion_mu = float(value["value"])
+            # FINDING-RCA-005: Clamp via emotion_mu setter to enforce [-1.0, 1.0]
+            self.emotion_mu = float(value["value"])
+            value["value"] = self._emotion_mu  # Write back clamped value
+        self._emotion_flow_mu = value
 
     @property
     def value_form_v(self) -> dict:
@@ -110,9 +115,11 @@ class KernelStateManager:
 
     @value_form_v.setter
     def value_form_v(self, value: dict) -> None:
-        self._value_form_v = value
         if "score" in value:
-            self._value_v = float(value["score"])
+            # FINDING-RCA-005: Clamp via value_v setter to enforce [0.0, 1.0]
+            self.value_v = float(value["score"])
+            value["score"] = self._value_v  # Write back clamped value
+        self._value_form_v = value
 
     @property
     def goal_omega(self) -> dict:
