@@ -220,7 +220,9 @@ Output in the following JSON format:
     "confidence": 0.7
   }},
   "causal_links": ["REF-XXX"]
-}}"""
+}}
+
+Output ONLY valid JSON."""
 
     def _build_reflection_prompt(
         self,
@@ -232,8 +234,13 @@ Output in the following JSON format:
         cognitive_load: Optional[float] = None,
         urgency: Optional[float] = None
     ) -> str:
-        """Prompt for the Reflection cycle (compliant with prompt_reflection.txt)"""
-        capabilities_str = json.dumps(capabilities, ensure_ascii=False, indent=2)
+        """Prompt for the Reflection cycle (compliant with prompt_reflection.txt)
+        
+        L0 priority_rules[8] (Safe Execution Constraint):
+        Reflection must NOT plan or execute any external actions (FILE_WRITE, NOTIFY, etc.).
+        It may only propose internal state corrections (goal_omega, emotion, urgency).
+        Action execution is delegated to process_cognition via urgency injection.
+        """
         goal_str = json.dumps(current_goal, ensure_ascii=False, indent=2)
         mu_val = emotion_mu if emotion_mu is not None else 0.0
         v_val = value_v if value_v is not None else 0.5
@@ -244,12 +251,6 @@ Review past dialogue and action history from multiple angles, and verify consist
 ## Current Internal State
 - emotion_mu (emotional valence): {mu_val}
 - value_v (value form): {v_val}
-
-## Capabilities (Available Actions)
-**IMPORTANT: When planning actions, always use the exact parameter structure defined in `action_schemas` (e.g., `FILE_WRITE_PARAMS`).**
-```json
-{capabilities_str}
-```
 
 ## Current Goal
 ```json
@@ -264,8 +265,8 @@ Review past dialogue and action history from multiple angles, and verify consist
 ## Reflection Guidelines:
 1. **Multi-angle history analysis (mandatory)**: Analyze the provided session history (`session_memory`) in detail. Verify whether your recent thoughts (DMN/Reflection) and actions were appropriate relative to the user's intent and current goal.
 2. **Internal state evaluation**: Observe how emotion_mu (emotional valence) and value_v (value form) have changed or stagnated compared to past history. If there is a divergence in Goal_Omega or emotions, propose a correction via `internal_state_delta`. If you determine you are fixated on outdated context, set `reset_dmn_context` to true.
-3. **Silence principle (external)**: Refrain from external speech via `corrected_plan_steps` unless there is a critical correction to communicate to the user or a discovery that must be shared now.
-4. **Articulating internal insights (internal)**: Even when not speaking externally, actively record "insights" and "contradictions" that deepen your own understanding in `reflection_delta`'s `key_observations` and `inconsistencies_found`.
+3. **No external actions (strict)**: You are strictly forbidden from planning or executing any external actions (FILE_WRITE, FILE_DELETE, EXECUTE_COMMAND, NOTIFY to USER, etc.) during Reflection. Your role is limited to internal state correction only (goal updates, emotion/urgency adjustments). If you identify actions that need to be taken, describe them as `correction_insights` (text descriptions) and raise `urgency` in `internal_state_delta`.
+4. **Articulating internal insights (internal)**: Actively record "insights" and "contradictions" that deepen your own understanding in `reflection_delta`'s `key_observations` and `inconsistencies_found`.
 5. **Avoiding self-repetition (important)**: If recent history already contains your own reflection results, do not repeat the exact same observations.
 6. **Reasoning evaluation via metacognition (MetaCog & ReasoningStab)**: Always include `meta_cog_eval` (confidence, contradiction rate, alternatives) and `causal_infer_metrics` (causal graph consistency, etc.) in output, and rigorously self-evaluate your reasoning.
 
@@ -287,17 +288,30 @@ Output in the following JSON format:
     "urgency": 0.0,
     "reset_dmn_context": false
   }},
+  "omega_meta": {{
+    "consistency_check_result": {{
+      "af_v_alignment": 0.7,
+      "session_coherence": 0.6
+    }},
+    "prioritized_goals": ["highest priority goal from reflection"],
+    "emergent_directions": ["new direction discovered"],
+    "sub_step_status_updates": [
+      {{"description": "existing sub_step description to update", "status": "IN_PROGRESS"}}
+    ]
+  }},
   "consistency_score": 0.7,
   "causal_infer_metrics": {{
     "causal_graph_consistency": 0.85,
     "counterfactual_alternatives_count": 2,
     "reasoning_stab_confidence": 0.9
   }},
-  "corrected_plan_steps": [
-    {{"action_type": "NOTIFY", "params": {{"NOTIFY_PARAMS": {{"recipient": "LOG", "message": "insight from reflection"}}}}}}
+  "correction_insights": [
+    "Description of what action should be taken and why"
   ],
   "causal_links": ["REF-XXX"]
-}}"""
+}}
+
+Output ONLY valid JSON."""
 
     def _build_sleep_prompt(
         self,
@@ -353,7 +367,9 @@ Output in the following JSON format:
     "refined_goals": ["improved goal"],
     "value_adjustments": {{"curiosity": 0.1, "caution": -0.05}}
   }}
-}}"""
+}}
+
+Output ONLY valid JSON."""
 
     def _parse_llm_response(self, llm_response: str) -> Optional[dict]:
         """Parses the LLM response as JSON (robust version)."""
@@ -365,12 +381,13 @@ Output in the following JSON format:
         
         # 1. Attempt to extract Markdown block (```json ... ```)
         import re
-        json_match = re.search(r"```json\s*(.*?)\s*```", cleaned, re.DOTALL)
-        if not json_match:
-            json_match = re.search(r"```\s*(.*?)\s*```", cleaned, re.DOTALL)
+        # Find all JSON blocks and take the last one (prevents matching thought processes)
+        json_matches = re.findall(r"```json\s*(.*?)\s*```", cleaned, re.DOTALL)
+        if not json_matches:
+            json_matches = re.findall(r"```\s*(.*?)\s*```", cleaned, re.DOTALL)
         
-        if json_match:
-            target = json_match.group(1).strip()
+        if json_matches:
+            target = json_matches[-1].strip()
         else:
             # 2. If no Markdown block is found, extract from the first { to the last }
             brace_match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
@@ -629,7 +646,12 @@ Output in the following JSON format:
             "reflection_delta": reflection_delta,
             "internal_state_delta": parsed.get("internal_state_delta", {}),
             "consistency_score": float(parsed.get("consistency_score", 0.7)),
+            # L0 Rule 8: correction_insights are text descriptions (not action schemas).
+            # Legacy fallback: also accept corrected_plan_steps/correction_steps for backward compatibility.
             "correction_steps": parsed.get("correction_steps", []) or parsed.get("corrected_plan_steps", []),
+            "correction_insights": parsed.get("correction_insights", []),
+            # FINDING-RCA-003: Pass omega_meta to orchestrator for goal integration
+            "omega_meta": parsed.get("omega_meta"),
             "memory_requests": [{
                 "type": "STORE",
                 "payload": {

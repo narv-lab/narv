@@ -47,14 +47,43 @@ class KernelOrchestrator:
         # L0 Scenario 3: Context correction hint passed to next cycle upon contradiction detection (FINDING-003)
         self._pending_contradiction_hint: Optional[dict] = None
 
+    # FINDING-RCA-004: Event types classified as internal thought (low priority for context window)
+    _INTERNAL_EVENT_TYPES = frozenset({
+        "dmn_thought", "reflection_result", "SYSTEM_NOTIFY",
+        "cognition_result", "DMN_LATENT_GOAL", "dream_result",
+    })
+
     def _get_filtered_session_context(self, session_memory: list[dict], limit: Optional[int] = None) -> list[dict]:
         """Suppresses large amounts of internal thought events from IDLE cycles and prioritizes important external events within limited context.
-        Slims down payloads of old internal events based on L1 conceptual design line 185 (dynamic compression).
+        FINDING-RCA-004: Prevents context pollution by reserving at least 60% of the context window
+        for external events (USER_INPUT, action_result, etc.) and capping internal thought events.
         """
         if limit is None:
             limit = config.system_context_window_size
-            
-        return session_memory[-limit:] if limit > 0 else []
+        if limit <= 0:
+            return []
+
+        # Classify events by priority
+        external: list[dict] = []
+        internal: list[dict] = []
+        for ev in session_memory:
+            if ev.get("event_type", "") in self._INTERNAL_EVENT_TYPES:
+                internal.append(ev)
+            else:
+                external.append(ev)
+
+        # Reserve at least 60% of context window for external (high-priority) events
+        external_quota = max(int(limit * 0.6), 1)
+        selected_external = external[-external_quota:]
+        internal_quota = limit - len(selected_external)
+        selected_internal = internal[-internal_quota:] if internal_quota > 0 else []
+
+        # Merge and restore original chronological order
+        combined = selected_external + selected_internal
+        index_map = {id(ev): i for i, ev in enumerate(session_memory)}
+        combined.sort(key=lambda ev: index_map.get(id(ev), 0))
+
+        return combined[-limit:]
 
     # ------------------------------------------------------------------
     # Internal Phases
@@ -168,6 +197,7 @@ class KernelOrchestrator:
                     # Ω_selfgen(C): Intrinsic urgency injection — triggers process_cognition in the next cycle
                     self._intrinsic_urgency = max(self._intrinsic_urgency, float(goal_delta.get("priority", 0.3)))
                     logger.info("Ω_selfgen: intrinsic urgency injected=%.2f from DMN latent goal", self._intrinsic_urgency)
+
             
             self._idle_mode = "REFLECTION"
         else:
@@ -214,18 +244,42 @@ class KernelOrchestrator:
                 
                 af_alignment = float(cc.get("af_v_alignment", 0.0))
                 session_coherence = float(cc.get("session_coherence", 0.0))
-                if af_alignment > 0.6 and session_coherence > 0.5:
+                # FINDING-RCA-003: Lowered thresholds from 0.6/0.5 to 0.4/0.3
+                # to allow goal integration at realistic confidence levels
+                if af_alignment > 0.4 and session_coherence > 0.3:
                     prioritized = omega_meta.get("prioritized_goals", [])
                     emergent = omega_meta.get("emergent_directions", [])
-                    if prioritized or emergent:
+                    # FINDING-RCA-003: Merge sub_step status updates from omega_meta
+                    sub_step_updates = omega_meta.get("sub_step_status_updates", [])
+                    if prioritized or emergent or sub_step_updates:
                         # Integrate into existing sub_steps (append instead of overwrite)
                         current_subs = list(self._state.goal_omega.get("sub_steps", []))
                         existing_descs = {s.get("description", "") for s in current_subs if isinstance(s, dict)}
+
+                        # FINDING-RCA-003: Apply status updates to existing sub_steps
+                        if sub_step_updates and isinstance(sub_step_updates, list):
+                            for update in sub_step_updates:
+                                if not isinstance(update, dict):
+                                    continue
+                                target_desc = update.get("description", "")
+                                new_status = update.get("status")
+                                if not target_desc or not new_status:
+                                    continue
+                                for sub in current_subs:
+                                    if isinstance(sub, dict) and sub.get("description") == target_desc:
+                                        old_status = sub.get("status")
+                                        sub["status"] = new_status
+                                        logger.info(
+                                            "Ω sub_step status updated: '%s' %s -> %s",
+                                            target_desc[:50], old_status, new_status,
+                                        )
+                                        break
+
                         for goal_desc in prioritized:
                             if isinstance(goal_desc, str) and goal_desc not in existing_descs:
                                 current_subs.append({
                                     "description": goal_desc,
-                                    "achievement_condition": "",
+                                    "achievement_condition": "UNDEFINED (To be evaluated and updated from context)",
                                     "status": "PENDING",
                                 })
                         for direction in emergent:
@@ -233,7 +287,7 @@ class KernelOrchestrator:
                             if desc not in existing_descs:
                                 current_subs.append({
                                     "description": desc,
-                                    "achievement_condition": "",
+                                    "achievement_condition": "UNDEFINED (To be evaluated and updated from context)",
                                     "status": "PENDING",
                                 })
                         self._state.goal_omega = {
@@ -244,13 +298,14 @@ class KernelOrchestrator:
                         # Intrinsic urgency injection: New sub-steps added, process in the next cycle
                         self._intrinsic_urgency = max(self._intrinsic_urgency, 0.3)
                         logger.info(
-                            "Ω_selfgen: omega_meta integrated. af_alignment=%.2f session_coherence=%.2f new_subs=%d",
+                            "Ω_selfgen: omega_meta integrated. af_alignment=%.2f session_coherence=%.2f new_subs=%d updates=%d",
                             af_alignment, session_coherence,
                             len(prioritized) + len(emergent),
+                            len(sub_step_updates) if isinstance(sub_step_updates, list) else 0,
                         )
                 else:
                     logger.debug(
-                        "omega_meta skipped: af_alignment=%.2f session_coherence=%.2f (thresholds: >0.6, >0.5)",
+                        "omega_meta skipped: af_alignment=%.2f session_coherence=%.2f (thresholds: >0.4, >0.3)",
                         af_alignment, session_coherence,
                     )
 
@@ -270,23 +325,64 @@ class KernelOrchestrator:
                     self._state.reset_dmn_context()
                 logger.info("Reflection applied internal_state_delta: %s", list(delta.keys()))
 
-            # (B-2) φ_corr: Limited execution of correction_steps
+            # (B-2) L0 priority_rules[8] (Safe Execution Constraint):
+            # Reflection/DMN must NOT directly execute any actions (including NOTIFY).
+            # Instead, correction insights are stored in memory as context for the next
+            # process_cognition cycle, which has the full persona and action rules.
             reflection_delta = reflection_result.get("reflection_delta", {})
             if not isinstance(reflection_delta, dict):
                 reflection_delta = {"confidence": 0.0}
 
-            correction_steps = reflection_result.get("correction_steps") or []
+            correction_steps = reflection_result.get("correction_steps") or reflection_result.get("corrected_plan_steps") or []
             if not isinstance(correction_steps, list):
                 correction_steps = []
+            correction_insights = reflection_result.get("correction_insights") or []
+            if not isinstance(correction_insights, list):
+                correction_insights = []
 
             reflection_confidence = float(reflection_delta.get("confidence", 0.0))
-            if correction_steps and reflection_confidence > 0.7:
-                # Relaxed previous constraint of NOTIFY only to allow internal state corrections (excluding destructive external changes)
-                safe_steps = [s for s in correction_steps if isinstance(s, dict) and s.get("action_type") not in ("FILE_WRITE", "FILE_DELETE", "EXECUTE_COMMAND")]
-                if safe_steps:
-                    self._execute_plan({"steps": safe_steps}, reflection_result)
-                    logger.info("φ_corr: executed %d safe correction_steps (confidence=%.2f)", len(safe_steps), reflection_confidence)
-                    action_executed_in_idle = True
+            has_corrections = (correction_steps or correction_insights) and reflection_confidence > 0.7
+            if has_corrections:
+                # Store correction insights in memory so process_cognition can act on them
+                self._mediator.route_action("memory", "store_event", {
+                    "event_type": "reflection_correction_hint",
+                    "payload": {
+                        "correction_steps": correction_steps,
+                        "correction_insights": correction_insights,
+                        "confidence": reflection_confidence,
+                        "source": "reflection_cycle",
+                    },
+                    "importance": 0.7,
+                    "session_id": self._state.session_id,
+                })
+                # Inject urgency to trigger process_cognition in the next cycle
+                self._intrinsic_urgency = max(self._intrinsic_urgency, 0.5)
+                logger.info(
+                    "L0-R8: %d correction_steps + %d correction_insights from Reflection stored as hint "
+                    "(confidence=%.2f). intrinsic_urgency raised to %.2f to trigger process_cognition.",
+                    len(correction_steps), len(correction_insights),
+                    reflection_confidence, self._intrinsic_urgency,
+                )
+
+            # FINDING-RCA-001: If PENDING sub_steps exist after Reflection,
+            # inject intrinsic_urgency to break out of IDLE and enter ACTIVE path next cycle.
+            # L0 priority_rules[6]: "Act vs Silence" — do not remain silent when incomplete sub_steps exist.
+            current_goal = self._state.goal_omega
+            if "internal_state_delta" in reflection_result:
+                delta_goal = reflection_result["internal_state_delta"].get("goal_omega")
+                if isinstance(delta_goal, dict):
+                    current_goal = delta_goal
+            pending_subs = [
+                s for s in current_goal.get("sub_steps", [])
+                if isinstance(s, dict) and s.get("status") in ("PENDING", "IN_PROGRESS")
+            ]
+            if pending_subs:
+                self._intrinsic_urgency = max(self._intrinsic_urgency, 0.5)
+                logger.info(
+                    "FINDING-RCA-001: %d PENDING/IN_PROGRESS sub_steps detected. "
+                    "Injecting intrinsic_urgency=%.2f to exit IDLE.",
+                    len(pending_subs), self._intrinsic_urgency,
+                )
 
             # MetaCog monitoring
             meta_cog = reflection_delta.get("meta_cog_eval", {})
