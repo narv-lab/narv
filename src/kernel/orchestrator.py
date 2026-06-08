@@ -897,7 +897,17 @@ class KernelOrchestrator:
         exec_res = self._mediator.route_action("actor", "execute_actions", {"actions": steps})
         
         actor_result = exec_res.get("result", {}) if exec_res.get("success") else {}
-        execution_status = actor_result.get("execution_result", "FAILED") if isinstance(actor_result, dict) else "FAILED"
+        
+        # FINDING-REPAIR: Expose the actual error message to the cognitive engine instead of masking it as "FAILED"
+        if isinstance(actor_result, dict):
+            if "execution_result" in actor_result:
+                execution_status = actor_result["execution_result"]
+            elif "message" in actor_result:
+                execution_status = f"FAILED: {actor_result.get('error_code', 'ERROR')} - {actor_result['message']}"
+            else:
+                execution_status = "FAILED"
+        else:
+            execution_status = "FAILED"
 
 
         # Record events
