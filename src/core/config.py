@@ -38,15 +38,26 @@ class AppConfig:
 
     @property
     def api_model_fast(self) -> str:
-        return self.data.get("api", {}).get("model_fast", "openai/gpt-3.5-turbo")
+        return self.data.get("api", {}).get("model_fast", "")
 
     @property
     def api_model_slow(self) -> str:
-        return self.data.get("api", {}).get("model_slow", "openai/gpt-4o")
+        return self.data.get("api", {}).get("model_slow", "")
 
     @property
     def api_model_embed(self) -> str:
-        return self.data.get("api", {}).get("model_embed", "openai/text-embedding-ada-002")
+        return self.data.get("api", {}).get("model_embed", "")
+
+    @property
+    def litellm_api_base(self) -> str:
+        """LiteLLM API base URL for chat completions. Empty string means use litellm defaults."""
+        return os.environ.get("LITELLM_API_BASE", self.data.get("api", {}).get("litellm_api_base", ""))
+
+    @property
+    def litellm_embedding_api_base(self) -> str:
+        """LiteLLM API base URL for embeddings. Falls back to litellm_api_base if empty."""
+        val = os.environ.get("LITELLM_EMBEDDING_API_BASE", self.data.get("api", {}).get("litellm_embedding_api_base", ""))
+        return val or self.litellm_api_base
 
     @property
     def cognitive_urgency_threshold_fast(self) -> float:
