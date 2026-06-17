@@ -37,7 +37,7 @@ class DIContainer:
 
         # 1. LLMGateway
         from src.llm_gateway.llm_gateway import LLMGateway
-        self.llm_gateway = LLMGateway(api_key=config.openrouter_api_key)
+        self.llm_gateway = LLMGateway()
         logger.info("  [OK] LLMGateway")
 
         # 2. Memory

@@ -6,12 +6,17 @@ api:
   retry_base_delay_sec: 1
   max_retries: 3
 
-  # Models for dual-process cognition. 
-  # 'fast' is used for immediate, reactive tasks (System 1).
-  # 'slow' is used for deep reflection and complex planning (System 2).
-  model_fast: "openrouter_text_model_here"
-  model_slow: "openrouter_text_model_here"
-  model_embed: "openrouter_embedding_model_here"
+  # LiteLLM endpoint configuration
+  # Set a custom API base URL (e.g., "http://localhost:4000" for LiteLLM Proxy).
+  # Leave empty to use litellm's built-in provider routing.
+  litellm_api_base: ""
+  # Separate endpoint for embedding models (optional). Falls back to litellm_api_base if empty.
+  litellm_embedding_api_base: ""
+  # Model names follow litellm naming convention (e.g., "gemini/gemini-2.0-flash", "anthropic/claude-sonnet-4-20250514").
+  # See: https://docs.litellm.ai/docs/providers
+  model_fast: "text_model_name_here"
+  model_slow: "text_model_name_here"
+  model_embed: "embedding_model_here"
 
 cognitive:
   # Routing threshold. Events with urgency >= this value bypass the slow model 
