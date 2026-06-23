@@ -84,6 +84,11 @@ class AppConfig:
         return int(self.data.get("cognitive", {}).get("sleep_tokens", 2048))
 
     @property
+    def cognitive_reflection_window(self) -> int:
+        """Number of session events passed to the Reflection prompt context."""
+        return int(self.data.get("cognitive", {}).get("reflection_window", 30))
+
+    @property
     def system_idle_cycles_for_sleep(self) -> int:
         return int(self.data.get("system", {}).get("idle_cycles_for_sleep", 5))
 
