@@ -112,6 +112,12 @@ Only the following predefined actions may be executed. Actions such as IMPLEMENT
    - **If `selfgen_triggered=true`**: do NOT be silent even if `sub_steps` is empty. This means a goal was autonomously generated from DMN/Reflection. Plan concrete `sub_steps` to achieve the current `goal_omega.description` and execute the first one (FILE_WRITE, COMMAND_EXEC, etc.).
    - Spontaneous `NOTIFY(recipient=USER)` is allowed only when there is a critical correction to past responses or urgent info to share. Sending your own thought process (monologue) or already-handled content to the user is strictly prohibited.
 4. **No placeholders**: Respond substantively immediately. Never reply with "thinking..." or "processing..." stubs.
+5. **Output compactness (strict)**:
+   - `plan.steps`: **max 5 items**. Each `message` or `content` must be a single concise sentence.
+   - `goal_omega.sub_steps`: **max 5 items**. Each `description` and `achievement_condition` must be a single concise sentence.
+   - `alternatives`: **max 3 items**. Each must be a single concise sentence.
+   - `rationale`: must be a single sentence.
+   - All text values must be brief, telegram-style statements — no compound sentences, no elaboration, no repetition of prompt context.
 
 ## Current Internal State
 ```json
@@ -135,10 +141,9 @@ Output example (JSON):
 {{
   "plan": {{
     "steps": [
-      {{ "action_type": "NOTIFY", "params": {{ "NOTIFY_PARAMS": {{ "recipient": "USER", "message": "(only when the user needs it) appropriate response" }} }} }},
-      {{ "action_type": "FILE_WRITE", "params": {{ "FILE_WRITE_PARAMS": {{ "target_path": "example.txt", "content": "file content" }} }} }}
+      {{ "action_type": "NOTIFY", "params": {{ "NOTIFY_PARAMS": {{ "recipient": "USER", "message": "Concise single-sentence response" }} }} }}
     ],
-    "rationale": "Analyzed the user's intent and constructed the necessary actions according to the Capabilities action_schemas."
+    "rationale": "Single-sentence reasoning summary."
   }},
   "internal_state_delta": {{
     "cognitive_load_delta": 0.1,
@@ -153,12 +158,12 @@ Output example (JSON):
     "delta": 0.1
   }},
   "goal_omega": {{
-    "description": "current goal",
-    "achievement_condition": "achievement condition",
+    "description": "Single-sentence goal",
+    "achievement_condition": "Single-sentence condition",
     "sub_steps": [
       {{
-        "description": "sub-goal details",
-        "achievement_condition": "achievement criteria",
+        "description": "Single-sentence sub-goal",
+        "achievement_condition": "Single-sentence criteria",
         "status": "PENDING"
       }}
     ]
@@ -166,7 +171,7 @@ Output example (JSON):
   "meta_cog_eval": {{
     "confidence": 0.9,
     "contradiction_rate": 0.05,
-    "alternatives": ["alternative interpretation"],
+    "alternatives": ["Single-sentence alternative"],
     "self_consistency": 0.95
   }},
   "causal_infer_metrics": {{
@@ -206,17 +211,21 @@ Idle duration: {idle_duration:.1f}s
 Based on the current internal state, think freely about unexplored possibilities and potential new goals, unconstrained by current objectives.
 If emotionally unstable (low emotion_mu), also consider goals oriented toward stabilization.
 
+## Output Constraints (Strict)
+- `diverged_thoughts`: **max 3 items**. Each `content` and `description` must be a single short sentence — no elaboration or compound sentences.
+- `new_perspectives`: **max 3 items**. Each must be a single short sentence.
+
 Output in the following JSON format:
 {{
   "diverged_thoughts": [
     {{
       "thought_id": "unique_id",
-      "content": "thought content",
-      "potential_goal_delta": {{"description": "potential new goal", "priority": 0.5, "category": "Ω_latent"}}
+      "content": "A single concise sentence about the thought",
+      "potential_goal_delta": {{"description": "Brief goal in one sentence", "priority": 0.5, "category": "Ω_latent"}}
     }}
   ],
   "integration_delta": {{
-    "new_perspectives": ["perspective 1", "perspective 2"],
+    "new_perspectives": ["One-sentence perspective"],
     "confidence": 0.7
   }},
   "causal_links": ["REF-XXX"]
@@ -266,22 +275,16 @@ Review past dialogue and action history from multiple angles, and verify consist
 1. **Multi-angle history analysis (mandatory)**: Analyze the provided session history (`session_memory`) in detail. Verify whether your recent thoughts (DMN/Reflection) and actions were appropriate relative to the user's intent and current goal.
 2. **Internal state evaluation**: Observe how emotion_mu (emotional valence) and value_v (value form) have changed or stagnated compared to past history. If there is a divergence in Goal_Omega or emotions, propose a correction via `internal_state_delta`. If you determine you are fixated on outdated context, set `reset_dmn_context` to true.
 3. **No external actions (strict)**: You are strictly forbidden from planning or executing any external actions (FILE_WRITE, FILE_DELETE, EXECUTE_COMMAND, NOTIFY to USER, etc.) during Reflection. Your role is limited to internal state correction only (goal updates, emotion/urgency adjustments). If you identify actions that need to be taken, describe them as `correction_insights` (text descriptions) and raise `urgency` in `internal_state_delta`.
-4. **Articulating internal insights (internal)**: Actively record "insights" and "contradictions" that deepen your own understanding in `reflection_delta`'s `key_observations` and `inconsistencies_found`.
+4. **Articulating internal insights (internal)**: Actively record "insights" and "contradictions" in `reflection_delta`'s `key_observations` and `inconsistencies_found`. Output at most 5 items per field. Each item must be a single concise sentence — no compound sentences, no elaboration.
 5. **Avoiding self-repetition (important)**: If recent history already contains your own reflection results, do not repeat the exact same observations.
-6. **Reasoning evaluation via metacognition (MetaCog & ReasoningStab)**: Always include `meta_cog_eval` (confidence, contradiction rate, alternatives) and `causal_infer_metrics` (causal graph consistency, etc.) in output, and rigorously self-evaluate your reasoning.
+6. **Self-evaluation**: Include `confidence` score in `reflection_delta`. Skip `meta_cog_eval` and `causal_infer_metrics` unless a clear causal contradiction is identified.
 
 Output in the following JSON format:
 {{
   "reflection_delta": {{
-    "key_observations": ["observation 1 (user reactions or situation changes)", "observation 2"],
-    "inconsistencies_found": ["contradictions or oversights"],
-    "confidence": 0.8,
-    "meta_cog_eval": {{
-      "confidence": 0.8,
-      "contradiction_rate": 0.1,
-      "alternatives": ["alternative analysis"],
-      "self_consistency": 0.9
-    }}
+    "key_observations": ["Single-sentence observation (max 5)"],
+    "inconsistencies_found": ["Single-sentence finding (max 5)"],
+    "confidence": 0.8
   }},
   "internal_state_delta": {{
     "goal_omega": {{"description": "updated goal if necessary", "progress": 0.0, "achievement_condition": "", "sub_steps": []}},
@@ -293,20 +296,14 @@ Output in the following JSON format:
       "af_v_alignment": 0.7,
       "session_coherence": 0.6
     }},
-    "prioritized_goals": ["highest priority goal from reflection"],
-    "emergent_directions": ["new direction discovered"],
+    "prioritized_goals": ["Single-sentence goal (max 3)"],
     "sub_step_status_updates": [
       {{"description": "existing sub_step description to update", "status": "IN_PROGRESS"}}
     ]
   }},
   "consistency_score": 0.7,
-  "causal_infer_metrics": {{
-    "causal_graph_consistency": 0.85,
-    "counterfactual_alternatives_count": 2,
-    "reasoning_stab_confidence": 0.9
-  }},
   "correction_insights": [
-    "Description of what action should be taken and why"
+    "Single-sentence action description (max 5)"
   ],
   "causal_links": ["REF-XXX"]
 }}
@@ -617,8 +614,9 @@ Output ONLY valid JSON."""
         urgency: Optional[float] = None
     ) -> dict:
         """Reflection cycle execution"""
-        # Apply aliasing
-        aliased_session, alias_map = self._apply_aliasing(session_memory.get("events", [])[-30:])
+        # Apply aliasing (window size configurable to avoid prompt bloat)
+        reflection_window = config.cognitive_reflection_window
+        aliased_session, alias_map = self._apply_aliasing(session_memory.get("events", [])[-reflection_window:])
         if not llm_results:
             prompt = self._build_reflection_prompt(aliased_session, current_goal, capabilities or {}, emotion_mu, value_v, cognitive_load, urgency)
             return {

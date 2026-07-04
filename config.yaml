@@ -33,6 +33,9 @@ cognitive:
   slow_tokens: 4096
   dmn_tokens: 4096
   sleep_tokens: 4096
+  # Number of session events passed to Reflection prompt.
+  # Reduced from hardcoded 30 to limit prompt token growth.
+  reflection_window: 15
 
 system:
   log_level: "INFO"

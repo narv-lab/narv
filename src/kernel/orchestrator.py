@@ -773,6 +773,28 @@ class KernelOrchestrator:
                     self._intrinsic_urgency = 0.0
                     logger.info("Urgency and intrinsic_urgency full reset after user notification.")
 
+                    # L0 Rule: Ghost Task Prevention
+                    non_notify_actions = [s for s in steps if s.get("action_type") != "NOTIFY"]
+                    if not non_notify_actions:
+                        current_goal = self._state.goal_omega
+                        if isinstance(current_goal, dict) and current_goal.get("sub_steps"):
+                            cleared_subs = []
+                            has_cleared = False
+                            for step in current_goal["sub_steps"]:
+                                if isinstance(step, dict) and step.get("status") in ("PENDING", "IN_PROGRESS"):
+                                    cleared_step = step.copy()
+                                    cleared_step["status"] = "COMPLETED"
+                                    cleared_subs.append(cleared_step)
+                                    has_cleared = True
+                                else:
+                                    cleared_subs.append(step)
+                            
+                            if has_cleared:
+                                self._state.goal_omega["sub_steps"] = cleared_subs
+                                self._state.goal_omega["description"] = "待機 (Waiting for next event)"
+                                self._state.goal_omega["achievement_condition"] = ""
+                                self._goal_last_updated_epoch = time.time()
+                                logger.info("Safety Net: Forced COMPLETED on remaining sub_steps and cleared goal_omega.description as ONLY NOTIFY was executed.")
 
 
             # Sleep determination (high load or idle limit exceeded)
