@@ -488,7 +488,7 @@ Output ONLY valid JSON."""
                 }]
             }
 
-        # LLM結果が注入済み = 計画を生成して返す
+        # LLM results have been injected — generate and return the plan
         llm_response_text = llm_results[0].get("response", "") if llm_results else ""
         parsed = self._parse_llm_response(llm_response_text)
 
@@ -532,7 +532,7 @@ Output ONLY valid JSON."""
             "emotion_flow_mu": parsed.get("emotion_flow_mu", {"value": 0.0, "delta": 0.0}),
             "value_form_v": parsed.get("value_form_v", {"score": 0.5, "delta": 0.0}),
             "goal_omega": parsed.get("goal_omega", {
-                "description": "目標未定義",
+                "description": "Goal undefined",
                 "achievement_condition": "",
                 "progress": 0.0,
                 "sub_steps": [],
