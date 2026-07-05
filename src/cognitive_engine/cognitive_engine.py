@@ -112,12 +112,12 @@ Only the following predefined actions may be executed. Actions such as IMPLEMENT
    - **If `selfgen_triggered=true`**: do NOT be silent even if `sub_steps` is empty. This means a goal was autonomously generated from DMN/Reflection. Plan concrete `sub_steps` to achieve the current `goal_omega.description` and execute the first one (FILE_WRITE, COMMAND_EXEC, etc.).
    - Spontaneous `NOTIFY(recipient=USER)` is allowed only when there is a critical correction to past responses or urgent info to share. Sending your own thought process (monologue) or already-handled content to the user is strictly prohibited.
 4. **No placeholders**: Respond substantively immediately. Never reply with "thinking..." or "processing..." stubs.
-5. **Output compactness (strict)**:
-   - `plan.steps`: **max 5 items**. Each `message` or `content` must be a single concise sentence.
+5. **Output compactness (strict)** — applies to metadata fields only, NOT to `params` payloads:
+   - `plan.steps`: **max 5 items**.
    - `goal_omega.sub_steps`: **max 5 items**. Each `description` and `achievement_condition` must be a single concise sentence.
    - `alternatives`: **max 3 items**. Each must be a single concise sentence.
    - `rationale`: must be a single sentence.
-   - All text values must be brief, telegram-style statements — no compound sentences, no elaboration, no repetition of prompt context.
+   - **Exception**: `params` content (`message`, `content`, `command`) is the action payload — write it at whatever length is needed for quality.
 
 ## Current Internal State
 ```json
@@ -141,7 +141,7 @@ Output example (JSON):
 {{
   "plan": {{
     "steps": [
-      {{ "action_type": "NOTIFY", "params": {{ "NOTIFY_PARAMS": {{ "recipient": "USER", "message": "Concise single-sentence response" }} }} }}
+      {{ "action_type": "NOTIFY", "params": {{ "NOTIFY_PARAMS": {{ "recipient": "USER", "message": "(appropriate response at whatever length needed)" }} }} }}
     ],
     "rationale": "Single-sentence reasoning summary."
   }},
@@ -488,7 +488,7 @@ Output ONLY valid JSON."""
                 }]
             }
 
-        # LLM結果が注入済み = 計画を生成して返す
+        # LLM results have been injected — generate and return the plan
         llm_response_text = llm_results[0].get("response", "") if llm_results else ""
         parsed = self._parse_llm_response(llm_response_text)
 
@@ -532,7 +532,7 @@ Output ONLY valid JSON."""
             "emotion_flow_mu": parsed.get("emotion_flow_mu", {"value": 0.0, "delta": 0.0}),
             "value_form_v": parsed.get("value_form_v", {"score": 0.5, "delta": 0.0}),
             "goal_omega": parsed.get("goal_omega", {
-                "description": "目標未定義",
+                "description": "Goal undefined",
                 "achievement_condition": "",
                 "progress": 0.0,
                 "sub_steps": [],
