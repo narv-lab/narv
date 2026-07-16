@@ -201,7 +201,7 @@ class LLMGateway:
     # ------------------------------------------------------------------
     # Public API (llm_gateway_v1)
     # ------------------------------------------------------------------
-    def query_openrouter(
+    def query_litellm(
         self,
         prompt: str,
         model: Optional[str] = None,
@@ -210,7 +210,7 @@ class LLMGateway:
         temperature: float = 0.7,
         caller_id: Optional[str] = None,
     ) -> dict:
-        """Text generation (query_openrouter operation).
+        """Text generation (query_litellm operation).
 
         Performs text generation using litellm.
         The model name from config.yaml is passed directly to litellm.
@@ -223,7 +223,7 @@ class LLMGateway:
             BudgetExceededError: When daily budget is exceeded
             LLMGatewayError: API_ERROR (when all retries are exhausted)
         """
-        self._validate_caller_id("query_openrouter", caller_id)
+        self._validate_caller_id("query_litellm", caller_id)
         self._check_budget()
 
         messages = []
@@ -233,7 +233,7 @@ class LLMGateway:
 
         actual_model = model or config.api_model_slow
 
-        logger.debug("query_openrouter caller_id=%s model=%s", caller_id, actual_model)
+        logger.debug("query_litellm caller_id=%s model=%s", caller_id, actual_model)
 
         response = self._completion_with_retry(
             model=actual_model,
