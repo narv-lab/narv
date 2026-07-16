@@ -170,7 +170,7 @@ class KernelMediator:
     def _resolve_llm_requests(self, requests: list[dict], temperature: float) -> list[dict]:
         results = []
         for req in requests:
-            res = self.route_action("llm_gateway", "query_openrouter", {
+            res = self.route_action("llm_gateway", "query_litellm", {
                 "prompt": req["prompt"],
                 "model": req.get("model"),
                 "system_prompt": req.get("system_prompt"),
