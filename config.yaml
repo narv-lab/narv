@@ -1,8 +1,8 @@
 # narv - Global Configuration
 
 api:
-  # Daily limit for OpenRouter API. Triggers budget exhaustion safeguards when reached.
-  openrouter_budget_daily: 1000
+  # Daily limit for LiteLLM API. Triggers budget exhaustion safeguards when reached.
+  litellm_budget_daily: 1000
   retry_base_delay_sec: 1
   max_retries: 3
 
@@ -14,9 +14,9 @@ api:
   litellm_embedding_api_base: ""
   # Model names follow litellm naming convention (e.g., "gemini/gemini-2.0-flash", "anthropic/claude-sonnet-4-20250514").
   # See: https://docs.litellm.ai/docs/providers
-  model_fast: "text_model_name_here"
-  model_slow: "text_model_name_here"
-  model_embed: "embedding_model_here"
+  model_fast: "gemini/gemini-3.1-flash-lite"
+  model_slow: "gemini/gemini-3.1-flash-lite"
+  model_embed: "gemini/gemini-embedding-001"
 
 cognitive:
   # Routing threshold. Events with urgency >= this value bypass the slow model 
@@ -45,7 +45,7 @@ system:
   idle_cycles_for_sleep: 60
   max_cognition_failures: 3
   max_resume_loop: 10
-  cycle_interval_seconds: 30.0
+  cycle_interval_seconds: 50.0
 
   # Capacity of Working Memory (Redis). When exceeded, older session events are pruned 
   # to a core set (e.g., 20). Increase to retain a longer raw event history before pruning.

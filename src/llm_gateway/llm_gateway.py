@@ -66,7 +66,7 @@ class LLMGateway:
     """litellm-based LLM API gateway. Implements the llm_gateway_v1 interface."""
 
     def __init__(self, api_key: Optional[str] = None) -> None:
-        self._budget_limit: int = config.openrouter_budget_daily
+        self._budget_limit: int = config.litellm_budget_daily
         self._api_base: str = config.litellm_api_base
         self._embedding_api_base: str = config.litellm_embedding_api_base
         self._state: dict = _load_budget_state()
@@ -214,7 +214,7 @@ class LLMGateway:
 
         Performs text generation using litellm.
         The model name from config.yaml is passed directly to litellm.
-        Must follow litellm's model naming convention (e.g., "openrouter/openai/gpt-5-nano",
+        Must follow litellm's model naming convention (e.g., "openai/gpt-4o",
         "gemini/gemini-2.0-flash", "anthropic/claude-sonnet-4-20250514", etc.).
 
         Returns:

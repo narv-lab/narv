@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 @pytest.fixture
 def llm_gateway():
-    os.environ["OPENROUTER_API_KEY"] = "dummy_key"
+    os.environ["GEMINI_API_KEY"] = "dummy_key"
     return LLMGateway(api_key="dummy_key")
 
 @patch('src.llm_gateway.llm_gateway._load_budget_state')
@@ -27,7 +27,7 @@ def test_llm_gateway_query_success(mock_post, llm_gateway):
         "usage": {"total_tokens": 10, "prompt_tokens": 5, "completion_tokens": 5}
     }
     
-    res = llm_gateway.query_openrouter(
+    res = llm_gateway.query_litellm(
         prompt="Hello",
         system_prompt="System",
         caller_id="kernel",
