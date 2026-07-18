@@ -35,18 +35,18 @@ flowchart TB
 
     subgraph ExternalGroup ["External Integration"]
         LLM["LLM Gateway<br>External API Adapter<br>Budget/Rate Limit Monitor<br>Retry/Backoff Control"]:::ext
-        OpenRouter(("OpenRouter API")):::ext
+        LiteLLM(("LiteLLM API")):::ext
     end
 
     %% Routing via Mediator
     M <-->|"gather_perceptions"| P
     M <-->|"execute_actions"| A
-    M <-->|"process_cognition<br>run_dmn / run_reflection"| CE
+    M <-->|"process_cognition<br>run_dmn_cycle / run_reflection_cycle"| CE
     M <-->|"query / store_event<br>consolidate_memory"| Mem
     M <-->|"Request Text Generation"| LLM
 
     %% Interactions with Environment and External APIs
     EnvIn -.->|"Scan / Read"| P
     A -.->|"Apply Side-effects"| EnvOut
-    LLM <-->|"HTTP API"| OpenRouter
+    LLM <-->|"HTTP API"| LiteLLM
 ```

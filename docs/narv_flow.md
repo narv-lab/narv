@@ -58,10 +58,10 @@ sequenceDiagram
             CE-->>M: reflection_result (State Correction)
             M-->>O: reflection_result
             opt If correction_steps are present
-                O->>M: route_action("execute_actions")
-                M->>A: Safe Correction Actions
-                A-->>M: execution_result
-                M-->>O: execution_result
+                O->>M: route_action("store_event")
+                M->>Mem: Store reflection_correction_hint
+                Mem-->>M: event_id
+                M-->>O: event_id
             end
         end
 
