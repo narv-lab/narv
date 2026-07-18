@@ -1,4 +1,4 @@
-# Narv: an architecture for autonomous agent
+# Narv: An Experimental Architecture for Autonomous Agents
 
 
 ## 0. Status
