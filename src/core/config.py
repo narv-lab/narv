@@ -16,17 +16,15 @@ class AppConfig:
         with open(self.config_path, "r") as f:
             return yaml.safe_load(f) or {}
 
-    @property
-    def openrouter_api_key(self) -> str:
-        return os.environ.get("OPENROUTER_API_KEY", "")
+
 
     @property
     def google_api_key(self) -> str:
         return os.environ.get("GOOGLE_API_KEY", "")
 
     @property
-    def openrouter_budget_daily(self) -> int:
-        return int(os.environ.get("OPENROUTER_BUDGET_DAILY", self.data.get("api", {}).get("openrouter_budget_daily", 1000)))
+    def litellm_budget_daily(self) -> int:
+        return int(os.environ.get("LITELLM_BUDGET_DAILY", self.data.get("api", {}).get("litellm_budget_daily", 1000)))
 
     @property
     def api_retry_base_delay_sec(self) -> float:

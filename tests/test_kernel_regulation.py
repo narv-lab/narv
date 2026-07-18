@@ -71,7 +71,7 @@ class TestKernelRegulation(unittest.TestCase):
         """FINDING-KERNEL-005: Resumption 回数超過で強制 SleepPhase"""
         # Mock CE failure to return final keys
         self.mock_ce.process_cognition.return_value = {"llm_requests": [{"prompt": "test"}]}
-        self.mock_llm.query_openrouter.return_value = {"usage": {"total_tokens": 10}, "choices": []}
+        self.mock_llm.query_litellm.return_value = {"usage": {"total_tokens": 10}, "choices": []}
         
         # Mock urgency > 0.8
         self.mock_perceptor.gather_perceptions.return_value = {
