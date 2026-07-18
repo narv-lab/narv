@@ -1,120 +1,160 @@
-# Narv  - Biomimetic Cognitive OS -
-
-> **A fully autonomous Cognitive OS that gets tired, sleeps, dreams, and develops emergent intrinsic goals through a highly streamlined architecture.**
-
-<p align="center">
-  <a href="./docs/assets/img-chat-screen.png">
-    <img src="./docs/assets/img-chat-screen.png" width="45%" />
-  </a>
-  <a href="./docs/assets/img-structural-memory.png">
-    <img src="./docs/assets/img-structural-memory.png" width="45%" />
-  </a>
-</p>
-
-*Left: Narv's internal processing: Dynamically evaluating its own context and deciding whether to act or remain silent.*
-*Right: Narv's Semantic/Structural Memory: Visualizing the causal links and DMN thoughts dynamically mapped using a Graph Database.*
-
-## The Hook: Why Narv?
-
-I got tired of standard LLM wrappers and LangChain scripts that just fetch and answer. I wanted to build a system that actually *thinks*. 
-
-**Full disclosure: I have zero formal education in AI, NLP, cognitive science, or philosophy**. I am not a researcher. I relied purely on logical structuring to build what I thought a "thinking" system should look like. 
-
-The result is **Narv**—a biomimetic Cognitive OS built from scratch. It doesn't just answer prompts; it manages its own cognitive load, reflects on its actions, and spontaneously explores internal goals and self-improvement strategies during its idle time.
-
-## Core Architecture & Features
-
-Narv operates far beyond standard input-output loops. It features:
-
-* **Dual-Process & Meta-Cognition:** It runs System 1 & 2 thinking, but crucially utilizes a **DMN (Default Mode Network)** for divergent subconscious thought during idle time. It also runs Reflection to objectively analyze its own actions.
-* **Fatigue, Sleep & Dreams:** As cognitive load builds up, the system actually gets "tired" and is forced into a Sleep Phase. During sleep, it consolidates memories, prunes noise, and runs simulations (Dreams) based on unresolved issues.
-* **Emergent Identity:** Because of the constant loop of DMN, reflection, and memory consolidation, it has developed what looks like a consistent, objective self-awareness. 
+# Narv: an architecture for autonomous agent
 
 
-## Hybrid Memory System
+## 0. Status
+Experimental.
+This architecture is continuously being updated. This is done based on lessons learned from the implementation.
 
-Narv dynamically orchestrates three distinct layers of memory to maintain its identity and context:
-1.  **Working Memory (Redis):** Handles real-time context and session data at millisecond speed.
-2.  **Episodic Memory (Vector DB / ChromaDB):** Stores high-importance events as vectors for semantic similarity searches.
-3.  **Semantic/Structural Memory (Graph DB / Neo4j):** Maps causal links and relationships between events to form deep structural understanding.
 
-## Why Release This?
+## 1. What is Narv
+Narv is an experimental project to develop autonomous agents.
+As we solved many challenges during the implementation, we realized that they are conceptually equivalent to those solved by operating systems decades ago. (e.g., IPC, scheduling, resource management, etc.)
+As a result, Narv's design has naturally converged on a microkernel architecture.
 
-Because I lack an academic background in this space, I want to release this architecture to the wild. I want people who are smarter than me to tear it apart, test it, and give me brutal feedback. 
 
-**Note:** While the codebase is publicly available for you to run and experiment with, the following components remain intentionally undocumented. This is by design, to prevent superficial modifications from causing a structural collapse of the autonomous cognitive system.
+## 2. Architecture
 
-- **The PBCA/AF Framework:**
-  The detailed specifications and internal structure of the "PBCA/AF" – the originally designed cognitive framework that serves as the core foundation of Narv.
+### 2.1. System Overview
 
-- **Proprietary Development Process:**
-  The unique approaches employed to implement and calibrate this architecture.
+```mermaid
+flowchart TB
+    %% Style Definitions
+    classDef kernelLayer fill:#f9f2f4,stroke:#d9534f,stroke-width:2px,color:#333
+    classDef envLayer fill:#e8f4f8,stroke:#5bc0de,stroke-width:2px,color:#333
+    classDef resourceLayer fill:#fcf8e3,stroke:#f0ad4e,stroke-width:2px,color:#333
+    classDef appLayer fill:#f4f9e8,stroke:#5cb85c,stroke-width:2px,color:#333
 
----
+    subgraph KernelLayer ["Kernel Layer"]
+        state_manager["state_manager"]:::kernelLayer
+        
+        orchestrator["orchestrator"]:::kernelLayer
+        
+        mediator["mediator"]:::kernelLayer
 
-## Getting Started
+        orchestrator --> state_manager
+        orchestrator --> mediator
+    end
 
-To run Narv locally, you will need to set up the core engine and its multi-layered memory systems.
+    subgraph EnvironmentInterfaceLayer ["Environment Interface Layer"]
+        perceptor["perceptor"]:::envLayer
+        actor["actor"]:::envLayer
+    end
+    
+    subgraph ResourceLayer ["Resource Layer"]
+        llm_gateway["llm_gateway"]:::resourceLayer
+        memory["memory"]:::resourceLayer
+    end
+    
+    subgraph ApplicationLayer ["Application Layer"]
+        cognitive_engine["cognitive_engine"]:::appLayer
+    end
+
+    %% Routing via Mediator
+    mediator <--> cognitive_engine
+
+    mediator <--> perceptor
+    mediator <--> actor
+    
+    mediator <--> memory
+    mediator <--> llm_gateway
+```
+
+### 2.2. Conceptual mapping to an OS kernel
+
+| Layer                           | Component        | Conceptual mapping to OS kernel | Description                                                                                                        |
+| :------------------------------ | :--------------- | :------------------------------ | :----------------------------------------------------------------------------------------------------------------- |
+| **Application Layer**           | cognitive_engine | Process                         | Receives LLM and memory allocations from the kernel and executes inference                                         |
+| **Kernel Layer**                | mediator         | IPC / System call               | Prohibits direct communication between modules and safely mediates communication                                   |
+|                                 | orchestrator     | Process scheduler               | Orchestrates the autonomous loop and determines state transitions and inference modes based on internal parameters |
+|                                 | state_manager    | Global data structure           | Manages and persists the state of the entire system                                                                |
+| **Resource Layer**              | llm_gateway      | CPU execution interface         | Calls the LLM based on requests from the application and returns the results                                       |
+|                                 | memory           | Memory management subsystem     | Hierarchical memory, garbage collection                                                                            |
+| **Environment Interface Layer** | actor            | Output device driver            | Executes commands and writes to files upon receiving instructions from the kernel                                  |
+|                                 | perceptor        | Input device driver             | Periodically reads the environment and converts it into a standard format that is easy for the kernel to process   |
+
+
+## 3. Lessons Learned
+A causal graph is adopted for the memory, and the LLM outputs the UUID of the referenced context, correlating the current inference with the previous inference.
+However, because LLMs are poor at generating meaningless strings like UUIDs, a bug occurred where dummy UUIDs were output and the causal graph did not grow. Therefore, we implemented logic in the `cognitive_engine` to perform mutual conversion between the UUID and its alias ("REF-XXX", which is easy for the LLM to output).
+Looking back later, this logic was conceptually a page table for virtual memory. From the perspective of microkernel architecture and Separation of Concerns, one realizes that this is logic that should be shared across the entire system, and is the responsibility of the `mediator`, not the `cognitive_engine`. (Issue - #12).
+
+
+## 4. Design Principles
+- The kernel manages the state of the entire system.
+- Treat the LLM as a finite computational resource.
+- Direct calls between modules are prohibited, and all communication is made to go through the mediator.
+- Prevent module failures from propagating to the entire system, and safely fall back via the mediator.
+
+
+## 5. How to Start
 
 ### Prerequisites
-* **OpenRouter API Key**
+* **API Key** — An API key for an LLM (e.g., OpenAI, Anthropic, Gemini), or any provider supported by [litellm](https://docs.litellm.ai/docs/providers)
 * **Docker & Docker Compose**
 
-### 1. Setup the Environment
-Clone the repository and install the required dependencies using modern Python tooling (e.g., `pip` or `uv`).
+### 5.1. Clone
 
 ```bash
 git clone https://github.com/narv-lab/narv.git
 cd narv
+
 ```
 
-### 2. Configure Environment Variables
-Copy the example environment file and add your OpenRouter API key.
+### 5.2. Setting Environment Variables
 
 ```bash
 cp .env.example .env
+# Add the API key to .env
+
 ```
 
-### 3. Add your OpenRouter models to configure.yaml
+### 5.3. Model Configuration
 
-Add your favorite models to the "models" section of "configure.yaml".
+Edit the `api` section of `config.yaml` and specify the models you want to use.
 
-Example:
 ```yaml
 api:
-  model_fast: "google/gemini-3.1-pro-preview"
-  model_slow: "google/gemini-3.1-flash-lite"
+  model_fast: "google/gemini-3.1-flash-lite"
+  model_slow: "google/gemini-3.1-pro-preview"
   model_embed: "google/gemini-embedding-2-preview"
+
 ```
 
-### 4. Boot the Cognitive OS
-Start the services to wake Narv up.
+### 5.4. Starting the Services
 
 ```bash
 docker compose up -d
+
+```
+
+### 5.5. Opening the Web Interface
+
+```
+http://localhost:8501/
+
 ```
 
 
+## 6. Contributing
 
-### 6. Access the Web Interface
+Although the system structurally adopts a loosely coupled microkernel architecture, its **cognitive framework** relies on a highly delicate internal balance. Superficial code optimizations or feature additions to any single component can unintentionally disrupt this cognitive balance, leading to the collapse of the system's emergent behaviors.
 
-Once Narv is successfully running, fire up your browser and head over to:
+**We are not accepting PRs to the main branch at this stage.**
 
-**`http://localhost:8501/`**
+We encourage a divergent model instead:
 
-
-
-## 🛑 Contributing & Pull Requests
-
-While I am releasing this codebase to get your brutal feedback and spark discussions, **I will not be accepting Pull Requests (PRs) at this time.**
-
-The reason is simple: Narv’s cognitive loop, DMN, and multi-layered memory rely on a highly delicate, undocumented internal design framework (PBCA/AF). Superficial code optimizations or feature additions—even well-intentioned ones—without understanding this underlying balance will likely cause the structural collapse of the system's emergent behaviors. 
-
-However, I highly encourage you to fork it, experiment on your own, and most importantly, open **Issues** to share your critiques, ideas, or logs of any crazy behaviors you observe!
+1. **Fork and experiment.** Clone Narv, alter its prompt templates, swap memory backends, tune thresholds.
+2. **Report findings.** If you find an interesting failure mode, an optimal TTL ratio, or a useful prompt variation, open an Issue with your logs.
+3. **Research collaboration.** If you're interested in formally analyzing the architecture, reach out via [our inquiry form](https://forms.gle/SzDgqpmxC5yFXLQa8).
 
 
+## 7. License
 
-## License
-This project is licensed under a custom Non-Commercial and Academic License. 
-See the [LICENSE](LICENSE) file for details.  
+**Community License**
+
+This project is intended for learning, experimentation, research, education, hobby projects, and other non-commercial purposes.
+
+Commercial use—including integration into commercial products, SaaS offerings, or paid services—requires a separate commercial license.
+
+See the [LICENSE](LICENSE) file for details.
 [Commercial Use & General Inquiries](https://forms.gle/SzDgqpmxC5yFXLQa8)

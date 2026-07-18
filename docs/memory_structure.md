@@ -85,4 +85,4 @@ sequenceDiagram
 ### Supplementary: Specific Roles and Operations of Each Storage
 * **Redis**: Constantly written via `store_event` and used to maintain the current context via `get_recent`.
 * **ChromaDB**: Targeted for saving events with an `importance` of 0.7 or higher, and is also used for unearthing old memories via the `anti_recency` strategy.
-* **Neo4j**: Structurally saves events when `causal_links` are present. Used for causal exploration via the `graph_traversal` strategy.
+* **Neo4j**: Structurally saves events when `causal_links` are present, or when `importance` is 0.5 or higher. Used for causal exploration via the `graph_traversal` strategy.
